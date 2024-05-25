@@ -21,18 +21,16 @@ namespace RedisJsonExample
             var db = connectionMultiplexer.GetDatabase();
             var redisKey = "customers";
 
-           // await InsertCustomers(db, redisKey);
-            await GetCustomers(db, redisKey);
+           // await InsertCustomers(db);
+            await GetCustomers(connectionMultiplexer, db);
 
             connectionMultiplexer.Close();
         }
 
-        private static async Task InsertCustomers(IDatabase db, string redisKey)
+        private static async Task InsertCustomers(IDatabase db)
         {
             var numCustomers = 1000000;
             var tasks = new List<Task>(numCustomers);
-
-            await db.ExecuteAsync("JSON.SET", redisKey, ".", "{}");
 
             var stopwatch = new Stopwatch();
             stopwatch.Start();
@@ -48,8 +46,8 @@ namespace RedisJsonExample
                 };
 
                 var json = JsonConvert.SerializeObject(customer);
-                // tasks.Add(db.JsonSetAsync(redisKey, $".{i}", json));
-                await db.ExecuteAsync("JSON.SET", redisKey, $".{i}", json);
+                var redisKey = $"customer:{i}";
+                tasks.Add(db.ExecuteAsync("JSON.SET", redisKey, ".", json));
             }
 
             await Task.WhenAll(tasks);
@@ -58,26 +56,58 @@ namespace RedisJsonExample
 
             Console.WriteLine($"Inserted 1000000 customers in {stopwatch.ElapsedMilliseconds} ms.");
         }
-
         //Get all customers
-        private static async Task GetCustomers(IDatabase db, string redisKey)
-        {
-             var stopwatch = new Stopwatch();
-             stopwatch.Start();
+        // private static async Task GetCustomers(IDatabase db, string redisKey)
+        // {
+        //      var stopwatch = new Stopwatch();
+        //      stopwatch.Start();
 
-            var redisValue = await db.ExecuteAsync("JSON.GET", redisKey);
-            if (!redisValue.IsNull)
-            {
-                // Get the string representation of the RedisResult
-                string json = redisValue.ToString();
+        //     var redisValue = await db.ExecuteAsync("JSON.GET", redisKey);
+        //     if (!redisValue.IsNull)
+        //     {
+        //         // Get the string representation of the RedisResult
+        //         string json = redisValue.ToString();
 
-                // Deserialize the JSON string into a Customer object
-                var retrievedCustomer = JsonConvert.DeserializeObject<Customer>(json);
-                stopwatch.Stop();
+        //         // Deserialize the JSON string into a Customer object
+        //         var retrievedCustomer = JsonConvert.DeserializeObject<Customer>(json);
+        //         stopwatch.Stop();
 
-                Console.WriteLine($"Retrieved 1000000 customers in {stopwatch.ElapsedMilliseconds} ms.");
-            }
-        }
+        //         Console.WriteLine($"Retrieved 1000000 customers in {stopwatch.ElapsedMilliseconds} ms.");
+
+        //         // Print the retrieved customer object
+        //         // var customer = retrievedCustomer[0];
+        //          Console.WriteLine($" Retrieved Customer: " + retrievedCustomer.ToString());
+        //         // Console.WriteLine($"Id: {retrievedCustomer.Id}");
+        //     }
+        // }
+
+      public static async Task<List<Customer>> GetAllCustomersAsync(IConnectionMultiplexer multiplexer, IDatabase db)
+    {
+        var server = multiplexer.GetServer(multiplexer.GetEndPoints().First());
+        var keys = server.Keys(pattern: "customer:*").Select(k => k.ToString()).ToArray();
+
+        var tasks = keys.Select(key => db.ExecuteAsync("JSON.GET", key)).ToArray();
+
+        await Task.WhenAll(tasks);
+
+        var customers = tasks
+            .Where(t => !t.Result.IsNull)
+            .Select(t => JsonConvert.DeserializeObject<Customer>(t.Result.ToString()))
+            .ToList();
+
+        return customers;
+    }
+
+     public static async Task GetCustomers(IConnectionMultiplexer _multiplexer, IDatabase db)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var allCustomers = await GetAllCustomersAsync(_multiplexer, db);
+        stopwatch.Stop();
+        var elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+        Console.WriteLine($"Fetched all customers. Total count: {allCustomers.Count}");
+        Console.WriteLine($"GetAllCustomersAsync took {elapsedMilliseconds} milliseconds.");
+        Console.WriteLine(JsonConvert.SerializeObject(allCustomers[9999], Formatting.Indented));
+    }
     }
 }
 
