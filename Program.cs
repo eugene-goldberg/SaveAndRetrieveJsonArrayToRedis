@@ -22,6 +22,7 @@ namespace RedisJsonExample
             var redisKey = "customers";
 
            // await InsertCustomers(db);
+            await UpdateCustomer(connectionMultiplexer, db);
             await GetCustomers(connectionMultiplexer, db);
 
             connectionMultiplexer.Close();
@@ -56,30 +57,6 @@ namespace RedisJsonExample
 
             Console.WriteLine($"Inserted 1000000 customers in {stopwatch.ElapsedMilliseconds} ms.");
         }
-        //Get all customers
-        // private static async Task GetCustomers(IDatabase db, string redisKey)
-        // {
-        //      var stopwatch = new Stopwatch();
-        //      stopwatch.Start();
-
-        //     var redisValue = await db.ExecuteAsync("JSON.GET", redisKey);
-        //     if (!redisValue.IsNull)
-        //     {
-        //         // Get the string representation of the RedisResult
-        //         string json = redisValue.ToString();
-
-        //         // Deserialize the JSON string into a Customer object
-        //         var retrievedCustomer = JsonConvert.DeserializeObject<Customer>(json);
-        //         stopwatch.Stop();
-
-        //         Console.WriteLine($"Retrieved 1000000 customers in {stopwatch.ElapsedMilliseconds} ms.");
-
-        //         // Print the retrieved customer object
-        //         // var customer = retrievedCustomer[0];
-        //          Console.WriteLine($" Retrieved Customer: " + retrievedCustomer.ToString());
-        //         // Console.WriteLine($"Id: {retrievedCustomer.Id}");
-        //     }
-        // }
 
       public static async Task<List<Customer>> GetAllCustomersAsync(IConnectionMultiplexer multiplexer, IDatabase db)
     {
@@ -108,6 +85,26 @@ namespace RedisJsonExample
         Console.WriteLine($"GetAllCustomersAsync took {elapsedMilliseconds} milliseconds.");
         Console.WriteLine(JsonConvert.SerializeObject(allCustomers[9999], Formatting.Indented));
     }
+
+    private static async Task UpdateSingleCustomer(IDatabase db, int customerId, Customer updatedCustomer)
+        {
+            var redisKey = $"customer:{customerId}";
+            var json = JsonConvert.SerializeObject(updatedCustomer);
+            await db.ExecuteAsync("JSON.SET", redisKey, ".", json);
+        }
+
+        public static async Task UpdateCustomer(IConnectionMultiplexer _multiplexer, IDatabase db)
+        {
+            var customerId = 624633;
+            var updatedCustomer = new Customer
+            {
+                Id = customerId,
+                Name = "Updated Customer 9999",
+                City = "Updated City 9999",
+                Email = "updated_customer_9999@email.com"
+            };
+            await UpdateSingleCustomer(db, customerId, updatedCustomer);
+        }
     }
 }
 
